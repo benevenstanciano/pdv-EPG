@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import sys
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 from urllib.error import HTTPError, URLError
@@ -59,12 +59,18 @@ def format_utc(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def duration_minutes(start: datetime, end: datetime) -> int:
-    seconds = (end - start).total_seconds()
-    if seconds <= 0:
-        return 0
-    minutes = int(round(seconds / 60.0))
-    return minutes if minutes > 0 else 1
+def snap_to_minute(dt: datetime) -> datetime:
+    return dt.replace(second=0, microsecond=0)
+
+
+def align_airing_times(start: datetime, end: datetime) -> tuple[datetime, datetime, int]:
+    """Make duration a whole number of minutes that exactly matches end - start."""
+    start = snap_to_minute(start)
+    end = snap_to_minute(end)
+    if end <= start:
+        end = start + timedelta(minutes=1)
+    minutes = int((end - start).total_seconds() // 60)
+    return start, end, minutes
 
 
 def first_text(element: ET.Element | None, names: Iterable[str]) -> str:
@@ -123,7 +129,7 @@ def convert_programmes(root: ET.Element) -> list[dict[str, str | int]]:
             skipped += 1
             continue
 
-        minutes = duration_minutes(start, stop)
+        start, stop, minutes = align_airing_times(start, stop)
         if minutes <= 0:
             skipped += 1
             continue
