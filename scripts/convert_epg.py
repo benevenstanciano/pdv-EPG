@@ -73,6 +73,36 @@ def align_airing_times(start: datetime, end: datetime) -> tuple[datetime, dateti
     return start, end, minutes
 
 
+def linearize_airings(airings: list[dict[str, str | int]]) -> list[dict[str, str | int]]:
+    """Drop nested programmes and clip partial overlaps so the guide is linear."""
+    linearized: list[dict[str, str | int]] = []
+    dropped = 0
+    clipped = 0
+
+    for item in airings:
+        current = dict(item)
+        if linearized and str(current["start"]) < str(linearized[-1]["end"]):
+            if str(current["end"]) <= str(linearized[-1]["end"]):
+                dropped += 1
+                continue
+            linearized[-1]["end"] = current["start"]
+            prev_start = datetime.strptime(str(linearized[-1]["start"]), "%Y-%m-%d %H:%M:%S")
+            prev_end = datetime.strptime(str(linearized[-1]["end"]), "%Y-%m-%d %H:%M:%S")
+            minutes = int((prev_end - prev_start).total_seconds() // 60)
+            if minutes <= 0:
+                linearized.pop()
+            else:
+                linearized[-1]["duration"] = minutes
+                clipped += 1
+        linearized.append(current)
+
+    print(
+        f"Linearized to {len(linearized)} airings (clipped {clipped}, dropped nested {dropped}).",
+        file=sys.stderr,
+    )
+    return linearized
+
+
 def first_text(element: ET.Element | None, names: Iterable[str]) -> str:
     if element is None:
         return ""
@@ -102,7 +132,7 @@ def fetch_bytes(source: str) -> bytes:
 
 
 def parse_source_xml(payload: bytes) -> ET.Element:
-    encodings = ("utf-8", "iso-8859-1", "cp1252")
+    encodings = ("utf-8", "cp1252", "iso-8859-1")
     last_error: Exception | None = None
     for encoding in encodings:
         try:
@@ -123,7 +153,7 @@ def convert_programmes(root: ET.Element) -> list[dict[str, str | int]]:
         start = parse_xmltv_datetime(programme.get("start"))
         stop = parse_xmltv_datetime(programme.get("stop"))
         title = first_text(programme, ("title",))
-        description = first_text(programme, ("desc", "description", "sub-title"))
+        description = first_text(programme, ("desc", "description", "sub-title")) or title
 
         if start is None or stop is None or not title:
             skipped += 1
@@ -145,6 +175,7 @@ def convert_programmes(root: ET.Element) -> list[dict[str, str | int]]:
         )
 
     airings.sort(key=lambda item: (item["start"], item["end"], item["title"]))
+    airings = linearize_airings(airings)
     if not airings:
         raise ConversionError("Source feed contained no convertible programmes.")
     print(f"Converted {len(airings)} airings (skipped {skipped}).", file=sys.stderr)
@@ -177,7 +208,7 @@ def render_xml(root: ET.Element, source: str) -> str:
     ET.indent(root, space="  ")
     body = ET.tostring(root, encoding="unicode")
     header = (
-        "<?xml version='1.0' encoding='UTF-8'?>\n"
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
         "\n"
         "<!--\n"
         "title, airing_type, startDateTime are required fields\n"
