@@ -26,12 +26,16 @@ CHANNELS = (
         "name": "Parole di Vita",
         "source": "https://admin.paroledivita.org/api/v1/paroledivita-xmltv",
         "output": Path("docs/pdv.xml"),
+        "filler_title": "Parola di Vita",
+        "filler_description": "Italian faith broadcasting.",
     },
     {
         "id": "BeJoyKids.it",
         "name": "Be Joy Kids",
         "source": "https://admin.paroledivita.org/api/v1/bejoy-xmltv",
         "output": Path("docs/bejoy.xml"),
+        "filler_title": "BeJoy.Kids",
+        "filler_description": "Italian children's network with a focus on faith and family.",
     },
 )
 
@@ -103,6 +107,39 @@ def linearize_airings(airings: list[dict[str, str | int]]) -> list[dict[str, str
     return linearized
 
 
+def fill_gaps(
+    airings: list[dict[str, str | int]],
+    title: str,
+    description: str,
+) -> list[dict[str, str | int]]:
+    """Insert filler airings in holes between consecutive programmes."""
+    if not title or len(airings) < 2:
+        return airings
+
+    filled: list[dict[str, str | int]] = []
+    inserted = 0
+    for item in airings:
+        if filled:
+            prev_end = datetime.strptime(str(filled[-1]["end"]), "%Y-%m-%d %H:%M:%S")
+            next_start = datetime.strptime(str(item["start"]), "%Y-%m-%d %H:%M:%S")
+            minutes = int((next_start - prev_end).total_seconds() // 60)
+            if minutes > 0:
+                filled.append(
+                    {
+                        "start": filled[-1]["end"],
+                        "end": item["start"],
+                        "duration": minutes,
+                        "title": title,
+                        "description": description,
+                    }
+                )
+                inserted += 1
+        filled.append(item)
+
+    print(f"Filled {inserted} gaps with {title!r}.", file=sys.stderr)
+    return filled
+
+
 def first_text(element: ET.Element | None, names: Iterable[str]) -> str:
     if element is None:
         return ""
@@ -145,7 +182,11 @@ def parse_source_xml(payload: bytes) -> ET.Element:
         raise ConversionError(f"Could not parse source XML: {last_error or exc}") from exc
 
 
-def convert_programmes(root: ET.Element) -> list[dict[str, str | int]]:
+def convert_programmes(
+    root: ET.Element,
+    filler_title: str = "",
+    filler_description: str = "",
+) -> list[dict[str, str | int]]:
     airings: list[dict[str, str | int]] = []
     skipped = 0
 
@@ -176,6 +217,7 @@ def convert_programmes(root: ET.Element) -> list[dict[str, str | int]]:
 
     airings.sort(key=lambda item: (item["start"], item["end"], item["title"]))
     airings = linearize_airings(airings)
+    airings = fill_gaps(airings, filler_title, filler_description)
     if not airings:
         raise ConversionError("Source feed contained no convertible programmes.")
     print(f"Converted {len(airings)} airings (skipped {skipped}).", file=sys.stderr)
@@ -229,10 +271,22 @@ def write_output(path: Path, xml_text: str) -> None:
     print(f"Wrote {path} ({path.stat().st_size} bytes).", file=sys.stderr)
 
 
+def channel_config_for_source(source: str) -> dict[str, object]:
+    for channel in CHANNELS:
+        if channel["source"] == source:
+            return channel
+    return {}
+
+
 def convert_channel(source: str, output: Path) -> None:
     payload = fetch_bytes(source)
     source_root = parse_source_xml(payload)
-    airings = convert_programmes(source_root)
+    config = channel_config_for_source(source)
+    airings = convert_programmes(
+        source_root,
+        filler_title=str(config.get("filler_title") or ""),
+        filler_description=str(config.get("filler_description") or ""),
+    )
     output_root = build_output_xml(airings)
     write_output(output, render_xml(output_root, source))
 
