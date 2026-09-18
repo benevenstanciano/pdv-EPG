@@ -1,0 +1,28 @@
+
+---
+
+### `template.xml`
+
+```xml
+<?xml version='1.0' encoding='UTF-8'?>
+
+<!--
+title, airing_type, startDateTime are required fields
+either endDateTime or duration is required
+timezone preferred as UTC
+startDateTime and endDateTime date format must be YYYY-MM-DD HH:MM:SS
+duration value must be minutes
+-->
+
+<channel>
+  <airing startDateTime="2024-06-15 00:00:00" endDateTime="2024-06-15 00:30:00" duration="30" timezone="UTC">
+    <title lang="en">Sample 1</title>
+    <airing_type>episode</airing_type>
+    <description lang="en">Sample Description One</description>
+  </airing>
+  <airing startDateTime="2024-06-15 01:00:00" endDateTime="2024-06-15 02:30:00" duration="90" timezone="UTC">
+    <title lang="en">Sample 2</title>
+    <airing_type>episode</airing_type>
+    <description lang="en">Sample Description Two</description>
+  </airing>
+</channel>
