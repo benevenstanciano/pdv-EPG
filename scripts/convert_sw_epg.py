@@ -4,10 +4,10 @@
 Source: https://benevenstanciano.github.io/zip-epg/epg-silkway.xml
 Output: docs/silkway.xml
 
-Same layout Toober expects:
-  required: title, startDateTime
+Same layout as docs/pdv.xml:
+  required: title, airing_type, startDateTime
   also provide: endDateTime, duration, timezone="UTC"
-  optional: type, description
+  title and description use lang="en"
   startDateTime / endDateTime as YYYY-MM-DD HH:MM:SS
 
 Rules:
@@ -315,11 +315,11 @@ def build_output_xml(airings: list[dict[str, str | int]]) -> ET.Element:
                 "timezone": "UTC",
             },
         )
-        title = ET.SubElement(airing, "title")
+        title = ET.SubElement(airing, "title", {"lang": "en"})
         title.text = str(item["title"])
-        airing_type = ET.SubElement(airing, "type")
+        airing_type = ET.SubElement(airing, "airing_type")
         airing_type.text = "episode"
-        description = ET.SubElement(airing, "description")
+        description = ET.SubElement(airing, "description", {"lang": "en"})
         description.text = str(item["description"])
     return channel
 
@@ -331,7 +331,7 @@ def render_xml(root: ET.Element, source: str) -> str:
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         "\n"
         "<!--\n"
-        "title, type, startDateTime are required fields\n"
+        "title, airing_type, startDateTime are required fields\n"
         "either endDateTime or duration is required\n"
         "timezone preferred as UTC\n"
         "startDateTime and endDateTime date format must be YYYY-MM-DD HH:MM:SS\n"
