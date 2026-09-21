@@ -29,9 +29,14 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Generate EPG
+      - name: Generate PDV and Be Joy EPG
+        continue-on-error: true
         run: python scripts/convert_epg.py
 
+      - name: Generate Silk Way EPG
+        continue-on-error: true
+        run: python scripts/convert_sw_epg.py
+        
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
