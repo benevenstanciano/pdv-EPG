@@ -4,10 +4,10 @@
 Source: https://benevenstanciano.github.io/zip-epg/epg-silkway.xml
 Output: docs/silkway.xml
 
-Same layout as docs/pdv.xml:
-  title, airing_type, startDateTime required
-  endDateTime and duration in whole minutes
-  timezone="UTC"
+Same layout Toober expects:
+  required: title, startDateTime
+  also provide: endDateTime, duration, timezone="UTC"
+  optional: type, description
   startDateTime / endDateTime as YYYY-MM-DD HH:MM:SS
 
 Rules:
@@ -42,6 +42,17 @@ OUTPUT = Path("docs/silkway.xml")
 FILLER_TITLE = "Silk Way TV"
 FILLER_DESCRIPTION = (
     "Silk Way TV is Kazakhstan's global news, culture and business channel."
+)
+PUNCTUATION_FOLD = str.maketrans(
+    {
+        "\u2018": "'",
+        "\u2019": "'",
+        "\u201c": '"',
+        "\u201d": '"',
+        "\u2013": "-",
+        "\u2014": "-",
+        "\u00a0": " ",
+    }
 )
 
 
@@ -82,13 +93,17 @@ def align_airing_times(start: datetime, end: datetime) -> tuple[datetime, dateti
     return start, end, minutes
 
 
+def clean_text(value: str) -> str:
+    return " ".join(value.translate(PUNCTUATION_FOLD).split())
+
+
 def first_text(element: ET.Element | None, names: tuple[str, ...]) -> str:
     if element is None:
         return ""
     for name in names:
         child = element.find(name)
         if child is not None and child.text and child.text.strip():
-            return " ".join(child.text.split())
+            return clean_text(child.text)
     return ""
 
 
@@ -300,11 +315,11 @@ def build_output_xml(airings: list[dict[str, str | int]]) -> ET.Element:
                 "timezone": "UTC",
             },
         )
-        title = ET.SubElement(airing, "title", {"lang": "en"})
+        title = ET.SubElement(airing, "title")
         title.text = str(item["title"])
-        airing_type = ET.SubElement(airing, "airing_type")
+        airing_type = ET.SubElement(airing, "type")
         airing_type.text = "episode"
-        description = ET.SubElement(airing, "description", {"lang": "en"})
+        description = ET.SubElement(airing, "description")
         description.text = str(item["description"])
     return channel
 
@@ -316,7 +331,7 @@ def render_xml(root: ET.Element, source: str) -> str:
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         "\n"
         "<!--\n"
-        "title, airing_type, startDateTime are required fields\n"
+        "title, type, startDateTime are required fields\n"
         "either endDateTime or duration is required\n"
         "timezone preferred as UTC\n"
         "startDateTime and endDateTime date format must be YYYY-MM-DD HH:MM:SS\n"
