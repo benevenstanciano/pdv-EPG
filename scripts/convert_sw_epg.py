@@ -11,11 +11,11 @@ Same layout as docs/pdv.xml:
   startDateTime / endDateTime as YYYY-MM-DD HH:MM:SS
 
 Rules:
-  - Prefer the Latin-script duplicate when two programmes share a start time.
-  - Drop leftover non-Latin titles/descriptions.
-  - Empty or non-Latin titles become "Silk Way TV".
-  - Empty or non-Latin descriptions become the Silk Way filler sentence.
-  - Timeline holes between airings are filled with those same defaults.
+  - Keep English / Latin-script titles only. Drop Cyrillic and other non-Latin rows.
+  - One programme per start time (prefer the Latin title if both exist).
+  - Clip or drop remaining overlaps so the grid is linear.
+  - Empty descriptions become the Silk Way filler sentence.
+  - Timeline holes between airings are filled with "Silk Way TV".
 """
 
 from __future__ import annotations
@@ -236,6 +236,7 @@ def normalize_copy(title: str, description: str) -> tuple[str, str]:
 def convert_programmes(root: ET.Element) -> list[dict[str, str | int]]:
     grouped: dict[datetime, list[dict[str, object]]] = {}
     skipped = 0
+    dropped_non_latin = 0
 
     for programme in root.findall("programme"):
         start = parse_xmltv_datetime(programme.get("start"))
@@ -245,6 +246,10 @@ def convert_programmes(root: ET.Element) -> list[dict[str, str | int]]:
 
         if start is None or stop is None:
             skipped += 1
+            continue
+
+        if not is_latin_text(title):
+            dropped_non_latin += 1
             continue
 
         start, stop, minutes = align_airing_times(start, stop)
@@ -263,14 +268,14 @@ def convert_programmes(root: ET.Element) -> list[dict[str, str | int]]:
         )
 
     airings: list[dict[str, str | int]] = []
-    ignored_non_latin = 0
+    ignored_dupes = 0
     for start in sorted(grouped):
         candidates = grouped[start]
         chosen = max(
             candidates,
             key=lambda item: latin_score(str(item["title"]), str(item["description"])),
         )
-        ignored_non_latin += max(0, len(candidates) - 1)
+        ignored_dupes += max(0, len(candidates) - 1)
 
         title, description = normalize_copy(
             str(chosen["title"]),
@@ -296,7 +301,8 @@ def convert_programmes(root: ET.Element) -> list[dict[str, str | int]]:
         raise ConversionError("Source feed contained no convertible programmes.")
     print(
         f"Converted {len(airings)} airings "
-        f"(skipped {skipped}, ignored {ignored_non_latin} same-time duplicates).",
+        f"(skipped {skipped}, dropped {dropped_non_latin} non-Latin, "
+        f"ignored {ignored_dupes} same-time duplicates).",
         file=sys.stderr,
     )
     return airings
